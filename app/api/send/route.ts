@@ -33,8 +33,9 @@ export const POST = async (request: Request) => {
     );
   }
 
+  let apiResponse: Response;
   try {
-    const apiResponse = await fetch(
+    apiResponse = await fetch(
       `${apiUrl}/waInstance${idInstance}/sendMessage/${apiTokenInstance}`,
       {
         method: "POST",
@@ -43,30 +44,6 @@ export const POST = async (request: Request) => {
         cache: "no-store",
       },
     );
-
-    if (!apiResponse.ok) {
-      return Response.json(
-        {
-          error: `GREEN-API не принял сообщение (HTTP ${apiResponse.status}).`,
-        },
-        { status: apiResponse.status },
-      );
-    }
-
-    const result: unknown = await apiResponse.json();
-    const idMessage =
-      typeof result === "object" && result !== null && "idMessage" in result
-        ? result.idMessage
-        : null;
-
-    if (typeof idMessage !== "string" || !idMessage) {
-      return Response.json(
-        { error: "GREEN-API ответил без идентификатора сообщения." },
-        { status: 502 },
-      );
-    }
-
-    return Response.json({ idMessage });
   } catch {
     return Response.json(
       {
@@ -76,4 +53,37 @@ export const POST = async (request: Request) => {
       { status: 502 },
     );
   }
+
+  if (!apiResponse.ok) {
+    return Response.json(
+      {
+        error: `GREEN-API не принял сообщение (HTTP ${apiResponse.status}).`,
+      },
+      { status: apiResponse.status },
+    );
+  }
+
+  let result: unknown;
+  try {
+    result = await apiResponse.json();
+  } catch {
+    return Response.json(
+      { error: "GREEN-API вернул некорректный ответ при отправке сообщения." },
+      { status: 502 },
+    );
+  }
+
+  const idMessage =
+    typeof result === "object" && result !== null && "idMessage" in result
+      ? result.idMessage
+      : null;
+
+  if (typeof idMessage !== "string" || !idMessage) {
+    return Response.json(
+      { error: "GREEN-API ответил без идентификатора сообщения." },
+      { status: 502 },
+    );
+  }
+
+  return Response.json({ idMessage });
 };
