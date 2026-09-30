@@ -22,13 +22,28 @@ function getNonEmptyString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function GET(request: Request) {
-  const searchParams = new URL(request.url).searchParams;
-  const input: ReceiveInput = {
-    idInstance: searchParams.get("idInstance"),
-    apiTokenInstance: searchParams.get("apiTokenInstance"),
-    phoneNumber: searchParams.get("phoneNumber"),
-  };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export async function POST(request: Request) {
+  let input: ReceiveInput;
+
+  try {
+    const body: unknown = await request.json();
+    if (!isRecord(body)) {
+      return Response.json(
+        { error: "Не удалось прочитать данные запроса." },
+        { status: 400 },
+      );
+    }
+    input = body;
+  } catch {
+    return Response.json(
+      { error: "Не удалось прочитать данные запроса." },
+      { status: 400 },
+    );
+  }
 
   const idInstance = getNonEmptyString(input.idInstance);
   const apiTokenInstance = getNonEmptyString(input.apiTokenInstance);

@@ -38,13 +38,14 @@ export default function ChatPanel() {
 
     async function receiveNextMessage() {
       try {
-        const params = new URLSearchParams({
-          idInstance: instanceId.trim(),
-          apiTokenInstance: apiTokenInstance.trim(),
-          phoneNumber,
-        });
-        const response = await fetch(`/api/receive?${params}`, {
-          method: "GET",
+        const response = await fetch("/api/receive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            idInstance: instanceId.trim(),
+            apiTokenInstance: apiTokenInstance.trim(),
+            phoneNumber,
+          }),
           signal: controller.signal,
         });
         const result: ReceiveResponse = await response.json();
