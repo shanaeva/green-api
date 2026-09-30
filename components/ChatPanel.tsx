@@ -1,25 +1,19 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-
-type ChatMessage = {
-  id: string;
-  text: string;
-  direction: "outgoing" | "incoming";
-  timestamp: number;
-};
+import { useState, type SubmitEvent } from "react";
+import { ChatHeader } from "./ChatHeader";
+import { ConnectionForm } from "./ConnectionForm";
+import { MessageComposer } from "./MessageComposer";
+import { MessageList } from "./MessageList";
+import type { ChatMessage } from "./types";
+import { useIncomingMessages } from "./useIncomingMessages";
 
 type SendResponse = {
   idMessage?: string;
   error?: string;
 };
 
-type ReceiveResponse = {
-  message?: Omit<ChatMessage, "direction"> | null;
-  error?: string;
-};
-
-export default function ChatPanel() {
+const ChatPanel = () => {
   const [instanceId, setInstanceId] = useState("");
   const [apiTokenInstance, setApiTokenInstance] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -29,61 +23,13 @@ export default function ChatPanel() {
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
-    if (!instanceId.trim() || !apiTokenInstance.trim() || !phoneNumber) return;
-
-    let isActive = true;
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const controller = new AbortController();
-
-    async function receiveNextMessage() {
-      try {
-        const response = await fetch("/api/receive", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            idInstance: instanceId.trim(),
-            apiTokenInstance: apiTokenInstance.trim(),
-            phoneNumber,
-          }),
-          signal: controller.signal,
-        });
-        const result: ReceiveResponse = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || "Не удалось получить сообщения.");
-        }
-
-        if (isActive && result.message) {
-          setMessages((currentMessages) =>
-            currentMessages.some((message) => message.id === result.message?.id)
-              ? currentMessages
-              : [
-                  ...currentMessages,
-                  { ...result.message!, direction: "incoming" },
-                ],
-          );
-          setErrorMessage("");
-        }
-      } catch (error) {
-        if (isActive && !controller.signal.aborted) {
-          setErrorMessage(
-            error instanceof Error ? error.message : "Не удалось получить сообщения.",
-          );
-        }
-      } finally {
-        if (isActive) timeoutId = setTimeout(receiveNextMessage, 500);
-      }
-    }
-
-    void receiveNextMessage();
-
-    return () => {
-      isActive = false;
-      controller.abort();
-      clearTimeout(timeoutId);
-    };
-  }, [apiTokenInstance, instanceId, phoneNumber]);
+  useIncomingMessages({
+    apiTokenInstance,
+    instanceId,
+    phoneNumber,
+    setErrorMessage,
+    setMessages,
+  });
 
   const hasCredentials = Boolean(instanceId.trim() && apiTokenInstance.trim());
   const canStartChat = Boolean(hasCredentials && recipientDraft.trim());
@@ -91,7 +37,7 @@ export default function ChatPanel() {
     hasCredentials && phoneNumber && messageDraft.trim() && !isSending,
   );
 
-  function startChat(event: FormEvent<HTMLFormElement>) {
+  const startChat = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!canStartChat) return;
@@ -100,9 +46,9 @@ export default function ChatPanel() {
     setMessages([]);
     setErrorMessage("");
     setMessageDraft("");
-  }
+  };
 
-  async function sendMessage(event: FormEvent<HTMLFormElement>) {
+  const sendMessage = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const message = messageDraft.trim();
@@ -141,16 +87,18 @@ export default function ChatPanel() {
       setMessageDraft("");
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Не удалось отправить сообщение.",
+        error instanceof Error
+          ? error.message
+          : "Не удалось отправить сообщение.",
       );
     } finally {
       setIsSending(false);
     }
-  }
+  };
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-5 px-5 py-8">
-      <header className="flex items-center justify-between gap-4">
+      <header className="flex items-center justify-between gap-4 px-5">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-sky-700">
             Green chat
@@ -164,132 +112,23 @@ export default function ChatPanel() {
         </span>
       </header>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-sm font-semibold text-slate-900">Подключение</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Введи данные инстанса GREEN-API, чтобы начать переписку.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">
-            Уникальный номер инстанса
-            <input
-              autoComplete="off"
-              className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/10"
-              onChange={(event) => setInstanceId(event.target.value)}
-              placeholder="Например, 1101000000"
-              value={instanceId}
-            />
-          </label>
-
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">
-            Токен инстанса
-            <input
-              autoComplete="new-password"
-              className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/10"
-              onChange={(event) => setApiTokenInstance(event.target.value)}
-              placeholder="Вставь apiTokenInstance"
-              type="password"
-              value={apiTokenInstance}
-            />
-          </label>
-        </div>
-      </section>
+      <ConnectionForm
+        apiTokenInstance={apiTokenInstance}
+        instanceId={instanceId}
+        onApiTokenInstanceChange={setApiTokenInstance}
+        onInstanceIdChange={setInstanceId}
+      />
 
       <section className="flex min-h-[560px] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-5 border-b border-slate-100 px-5 py-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sm font-semibold text-sky-800">
-              TG
-            </div>
-            <div className="min-w-0">
-              <h2 className="truncate font-semibold text-slate-900">
-                {phoneNumber || "Новый чат"}
-              </h2>
-              <p className="text-sm text-slate-500">
-                {phoneNumber ? "Telegram" : "Укажи номер получателя"}
-              </p>
-            </div>
-          </div>
+        <ChatHeader
+          canStartChat={canStartChat}
+          onRecipientChange={setRecipientDraft}
+          onStartChat={startChat}
+          phoneNumber={phoneNumber}
+          recipientDraft={recipientDraft}
+        />
 
-          <form
-            className="flex shrink-0 items-center gap-2"
-            onSubmit={startChat}
-          >
-            <label className="sr-only" htmlFor="recipient-phone">
-              Номер телефона получателя
-            </label>
-            <input
-              autoComplete="tel"
-              className="h-10 w-56 rounded-xl border border-slate-200 px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10"
-              id="recipient-phone"
-              onChange={(event) => setRecipientDraft(event.target.value)}
-              placeholder="Номер телефона"
-              type="tel"
-              value={recipientDraft}
-            />
-            <button
-              className="h-10 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              disabled={!canStartChat}
-              type="submit"
-            >
-              Открыть
-            </button>
-          </form>
-        </div>
-
-        <div
-          aria-live="polite"
-          className="flex flex-1 flex-col gap-3 overflow-y-auto bg-slate-50/70 p-6"
-        >
-          {messages.length === 0 ? (
-            <div className="m-auto flex max-w-sm flex-col items-center text-center">
-              <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-white text-2xl shadow-sm ring-1 ring-slate-200">
-                {phoneNumber ? "✉" : "＋"}
-              </div>
-              <p className="font-medium text-slate-800">
-                {phoneNumber ? "Пока нет сообщений" : "Открой чат по номеру телефона"}
-              </p>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                {phoneNumber
-                  ? "Здесь будет отображаться переписка."
-                  : "Укажи данные инстанса и номер получателя, чтобы начать переписку."}
-              </p>
-            </div>
-          ) : (
-            messages.map((message) => (
-              <div
-                className={`flex ${message.direction === "outgoing" ? "justify-end" : "justify-start"}`}
-                key={message.id}
-              >
-                <div
-                  className={`max-w-[75%] rounded-2xl px-4 py-3 shadow-sm ${
-                    message.direction === "outgoing"
-                      ? "rounded-br-md bg-sky-600 text-white"
-                      : "rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-200"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap break-words text-sm leading-6">
-                    {message.text}
-                  </p>
-                  <time
-                    className={`mt-1 block text-right text-[11px] ${
-                      message.direction === "outgoing" ? "text-sky-100" : "text-slate-400"
-                    }`}
-                    dateTime={new Date(message.timestamp).toISOString()}
-                  >
-                    {new Intl.DateTimeFormat("ru", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }).format(message.timestamp)}
-                  </time>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        <MessageList messages={messages} phoneNumber={phoneNumber} />
 
         {errorMessage && (
           <p
@@ -301,30 +140,17 @@ export default function ChatPanel() {
           </p>
         )}
 
-        <form
-          className="flex items-end gap-3 border-t border-slate-100 bg-white p-4"
-          onSubmit={sendMessage}
-        >
-          <label className="sr-only" htmlFor="message-draft">
-            Текст сообщения
-          </label>
-          <textarea
-            className="min-h-12 max-h-32 flex-1 resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/10 disabled:cursor-not-allowed disabled:bg-slate-50"
-            disabled={!phoneNumber}
-            id="message-draft"
-            onChange={(event) => setMessageDraft(event.target.value)}
-            placeholder={phoneNumber ? "Написать сообщение..." : "Сначала открой чат"}
-            value={messageDraft}
-          />
-          <button
-            className="h-12 rounded-xl bg-sky-600 px-5 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={!canSendMessage}
-            type="submit"
-          >
-            {isSending ? "Отправляем…" : "Отправить"}
-          </button>
-        </form>
+        <MessageComposer
+          canSendMessage={canSendMessage}
+          isSending={isSending}
+          messageDraft={messageDraft}
+          onMessageDraftChange={setMessageDraft}
+          onSendMessage={sendMessage}
+          phoneNumber={phoneNumber}
+        />
       </section>
     </main>
   );
-}
+};
+
+export default ChatPanel;
