@@ -1,42 +1,23 @@
-type SendMessageInput = {
-  idInstance?: unknown;
-  apiTokenInstance?: unknown;
-  phoneNumber?: unknown;
-  message?: unknown;
-};
+import {
+  getGreenApiBaseUrl,
+  getGreenApiCredentials,
+  getNonEmptyString,
+  readJsonObject,
+} from "@/lib/server/green-api";
 
-function getNonEmptyString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export async function POST(request: Request) {
-  let input: SendMessageInput;
-
-  try {
-    const body: unknown = await request.json();
-    if (!isRecord(body)) {
-      return Response.json(
-        { error: "Не удалось прочитать данные запроса." },
-        { status: 400 },
-      );
-    }
-    input = body;
-  } catch {
+export const POST = async (request: Request) => {
+  const input = await readJsonObject(request);
+  if (!input) {
     return Response.json(
       { error: "Не удалось прочитать данные запроса." },
       { status: 400 },
     );
   }
 
-  const idInstance = getNonEmptyString(input.idInstance);
-  const apiTokenInstance = getNonEmptyString(input.apiTokenInstance);
-  const phoneNumber = getNonEmptyString(input.phoneNumber).replace(/\D/g, "");
+  const { idInstance, apiTokenInstance, phoneNumber } =
+    getGreenApiCredentials(input);
   const message = getNonEmptyString(input.message);
-  const apiUrl = process.env.GREEN_API_URL?.replace(/\/+$/, "");
+  const apiUrl = getGreenApiBaseUrl();
 
   if (!idInstance || !apiTokenInstance || !phoneNumber || !message) {
     return Response.json(
@@ -65,7 +46,9 @@ export async function POST(request: Request) {
 
     if (!apiResponse.ok) {
       return Response.json(
-        { error: `GREEN-API не принял сообщение (HTTP ${apiResponse.status}).` },
+        {
+          error: `GREEN-API не принял сообщение (HTTP ${apiResponse.status}).`,
+        },
         { status: apiResponse.status },
       );
     }
@@ -86,8 +69,11 @@ export async function POST(request: Request) {
     return Response.json({ idMessage });
   } catch {
     return Response.json(
-      { error: "Не удалось связаться с GREEN-API. Проверь подключение и apiUrl." },
+      {
+        error:
+          "Не удалось связаться с GREEN-API. Проверь подключение и apiUrl.",
+      },
       { status: 502 },
     );
   }
-}
+};

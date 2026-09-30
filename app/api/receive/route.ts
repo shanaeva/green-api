@@ -1,8 +1,8 @@
-type ReceiveInput = {
-  idInstance?: unknown;
-  apiTokenInstance?: unknown;
-  phoneNumber?: unknown;
-};
+import {
+  getGreenApiBaseUrl,
+  getGreenApiCredentials,
+  readJsonObject,
+} from "@/lib/server/green-api";
 
 type Notification = {
   receiptId?: number;
@@ -18,37 +18,18 @@ type Notification = {
   };
 };
 
-function getNonEmptyString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export async function POST(request: Request) {
-  let input: ReceiveInput;
-
-  try {
-    const body: unknown = await request.json();
-    if (!isRecord(body)) {
-      return Response.json(
-        { error: "Не удалось прочитать данные запроса." },
-        { status: 400 },
-      );
-    }
-    input = body;
-  } catch {
+export const POST = async (request: Request) => {
+  const input = await readJsonObject(request);
+  if (!input) {
     return Response.json(
       { error: "Не удалось прочитать данные запроса." },
       { status: 400 },
     );
   }
 
-  const idInstance = getNonEmptyString(input.idInstance);
-  const apiTokenInstance = getNonEmptyString(input.apiTokenInstance);
-  const phoneNumber = getNonEmptyString(input.phoneNumber).replace(/\D/g, "");
-  const apiUrl = process.env.GREEN_API_URL?.replace(/\/+$/, "");
+  const { idInstance, apiTokenInstance, phoneNumber } =
+    getGreenApiCredentials(input);
+  const apiUrl = getGreenApiBaseUrl();
 
   if (!idInstance || !apiTokenInstance || !phoneNumber) {
     return Response.json(
@@ -131,4 +112,4 @@ export async function POST(request: Request) {
       { status: 502 },
     );
   }
-}
+};
